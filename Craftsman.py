@@ -15,6 +15,8 @@ class KP2:
         image = Image.open("icon.png")
         photo = ImageTk.PhotoImage(image)
         root.iconphoto(True, photo)
+        root.config(bg="#ece9d8") 
+
         # Ensure required directories exist
         os.makedirs("cache", exist_ok=True)
         os.makedirs("stamps", exist_ok=True)
@@ -22,7 +24,7 @@ class KP2:
 
         # Initial state
         self.saved = 1
-        self.curfile = "NULL"
+        self.curpath = "NULL"
         self.current_tool = "pen"
         self.brush_size = 3
         self.colors = [
@@ -127,14 +129,14 @@ class KP2:
 
         # Sidebar for tools
         self.sidebar = tk.Frame(self.main_frame, width=100, bg="#ece9d8")
-        self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
-
+        self.sidebar.pack(side=tk.LEFT)
         self.setup_sidebar()
 
         # Main drawing canvas
         self.canvas = tk.Canvas(self.main_frame, bg="white",
                                 width=self.image_width, height=self.image_height)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.canvas.pack(side=tk.LEFT, anchor="nw", fill=None, expand=False)
+        self.canvas.pack(side=tk.TOP)
         self.img_for_tk = ImageTk.PhotoImage(self.image)
         self.image_on_canvas = self.canvas.create_image(0, 0, anchor="nw", image=self.img_for_tk)
 
@@ -146,6 +148,10 @@ class KP2:
     def setup_sidebar(self):
         for widget in self.sidebar.winfo_children():
             widget.destroy()
+
+        # Create a frame just for tool buttons
+        tools_frame = tk.Frame(self.sidebar, bg="#ece9d8")
+        tools_frame.pack(side=tk.TOP, fill=tk.X, pady=5)
 
         btns = [
             ("pen", self.use_pen),
@@ -167,15 +173,20 @@ class KP2:
                 btn = tk.Button(self.sidebar, image=icon, command=cmd, bg="#ece9d8")
             else:
                 btn = tk.Button(self.sidebar, text=name.capitalize(), command=cmd, bg="#ece9d8")
-            btn.pack(pady=3, fill=tk.X)
+            btn.pack(side=tk.TOP, pady=2, fill=tk.X)
 
-        tk.Label(self.sidebar, text="Brush Size:", bg="#ece9d8").pack(pady=(10, 3))
+        # Create a frame for brush sizes below tools
+        brush_frame = tk.Frame(self.sidebar, bg="#ece9d8")
+        brush_frame.pack(side=tk.TOP, fill=tk.X, pady=(10, 0))
+
+        tk.Label(brush_frame, text="Brush Size:", bg="#ece9d8").pack(pady=(0, 3))
+
         for name, size in [("small", 1), ("medium", 5), ("large", 10)]:
             icon = self.brush_icons.get(name)
             if icon:
-                btn = tk.Button(self.sidebar, image=icon, command=lambda s=size: self.set_brush_size(s), bg="#ece9d8")
+                btn = tk.Button(brush_frame, image=icon, command=lambda s=size: self.set_brush_size(s), bg="#ece9d8")
             else:
-                btn = tk.Button(self.sidebar, text=name.capitalize(), command=lambda s=size: self.set_brush_size(s), bg="#ece9d8")
+                btn = tk.Button(brush_frame, text=name.capitalize(), command=lambda s=size: self.set_brush_size(s), bg="#ece9d8")
             btn.pack(pady=2, fill=tk.X)
 
     def setup_bottom_panel(self):
@@ -206,10 +217,10 @@ class KP2:
         add_stamp_icon = self.icons.get("addcustom")
         if add_stamp_icon:
             add_stamp_btn = tk.Button(self.stamps_frame, image=add_stamp_icon,
-                                      command=self.add_custom_stamp, bg="#d0d0d0")
+                                      command=self.add_custom_stamp, bg="#ece9d8")
         else:
             add_stamp_btn = tk.Button(self.stamps_frame, text="+ Add Custom Stamp",
-                                      command=self.add_custom_stamp, bg="#d0d0d0")
+                                      command=self.add_custom_stamp, bg="#ece9d8")
         add_stamp_btn.pack(side=tk.LEFT, padx=5, pady=5)
 
         if self.color_icon:
@@ -290,20 +301,37 @@ class KP2:
         self.root.config(menu=menubar)
 
     def new_canvas(self):
+        if (self.saved == 0):
+            response = messagebox.askyesno("Save", "Do you want to save?")
+            if response:
+                self.normalsave_canvas()
+            else:
+                dummyvalue = 69
+        else:
+                dummyvalue = 69
         self.image = Image.new("RGBA", (self.image_width, self.image_height), "white")
         self.draw = ImageDraw.Draw(self.image)
         self.update_canvas_image()
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.save_undo()
+        self.curpath = "NULL"
 
     def open_canvas(self):
+        if (self.saved == 0):
+            response = messagebox.askyesno("Save", "Do you want to save?")
+            if response:
+                self.normalsave_canvas()
+            else:
+                dummyvalue = 69
+        else:
+                dummyvalue = 69
         path = filedialog.askopenfilename(filetypes=[("Portable Network Graphics", "*.png;*")])
         if not path:
             return
         try:
             img = Image.open(path).convert("RGBA")
-            self.curfile = path
+            self.curpath = path
         except Exception as e:
             messagebox.showerror("Open Error", f"Cannot open image:\n{e}")
             return
@@ -319,26 +347,24 @@ class KP2:
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.save_undo()
+    def save_canvas(self):
+        path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
+        if path: 
+            try:
+                self.image.save(path, "PNG")
+                self.curpath = path
+            except Exception as e:
+                messagebox.showerror("Save Error", f"Cannot save image:\n{e}")
 
     def normalsave_canvas(self):
-        if (self.curfile == "NULL"):
+        if (self.curpath == "NULL"):
             self.save_canvas()
         else:
             try:
-                self.image.save(self.curfile, "PNG")
-                self.saved = 1
+                self.image.save(self.curpath, "PNG")
             except Exception as e:
                 messagebox.showerror("Save Error", f"Cannot save image:\n{e}")
 
-    def save_canvas(self):
-        path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
-        if path:
-            try:
-                self.image.save(path, "PNG")
-                self.saved = 1
-                self.curfile = path
-            except Exception as e:
-                messagebox.showerror("Save Error", f"Cannot save image:\n{e}")
 
     # TOOL SELECTORS
     def use_pen(self): self.current_tool = "pen"; self.update_bottom_panel()
@@ -535,11 +561,15 @@ class KP2:
     def on_close(self):
         try:
             if (self.saved == 0):
-                print("not saved")
-            if (self.saved == 1):
-                print("saved")
+                response = messagebox.askyesno("Save", "Do you want to save?")
+                if response:
+                    self.normalsave_canvas()
+                else:
+                    dummyvalue = 69
+            else:
+                dummyvalue = 69
         except:
-            print("saved")
+            dummyvalue = 69
         os.rmdir("cache")
         self.root.destroy()
 
